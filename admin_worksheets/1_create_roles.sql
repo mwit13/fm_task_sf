@@ -1,0 +1,30 @@
+USE ROLE accountadmin;
+alter account set timezone = 'UTC';
+
+-- operations role
+USE ROLE securityadmin;
+CREATE ROLE IF NOT EXISTS ops;
+GRANT ROLE ops TO ROLE sysadmin;
+
+USE ROLE accountadmin;
+GRANT CREATE WAREHOUSE ON ACCOUNT TO ROLE ops;
+GRANT CREATE DATABASE ON ACCOUNT TO ROLE ops;
+GRANT CREATE INTEGRATION ON ACCOUNT TO ROLE ops;
+GRANT MANAGE GRANTS ON ACCOUNT TO ROLE ops;
+GRANT CREATE TASK ON ACCOUNT TO ROLE ops;
+GRANT EXECUTE TASK ON ACCOUNT TO ROLE ops;
+
+-- developer role
+USE ROLE securityadmin;
+CREATE ROLE IF NOT EXISTS dev;
+GRANT ROLE dev TO ROLE ops;
+
+-- service role
+USE ROLE securityadmin;
+CREATE ROLE IF NOT EXISTS ser;
+GRANT ROLE ser TO ROLE dev;
+
+-- analyst role
+USE ROLE securityadmin;
+CREATE ROLE IF NOT EXISTS ana;
+GRANT ROLE ana TO ROLE dev;

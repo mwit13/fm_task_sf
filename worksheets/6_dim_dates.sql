@@ -1,0 +1,59 @@
+USE ROLE DEV;
+CREATE TABLE IF NOT EXISTS taskdb.dwh.dim_dates
+    DATA_RETENTION_TIME_IN_DAYS = 1
+    (
+    created_date DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_date DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date_value  DATE UNIQUE NOT NULL
+    );
+
+USE ROLE DEV;
+CREATE STREAM IF NOT EXISTS taskdb.dwh.stream_revenues_per_day4dim_dates ON DYNAMIC TABLE TASKDB.STG.REVENUES_PER_DAY;
+USE ROLE DEV;
+CREATE STREAM IF NOT EXISTS taskdb.dwh.stream_movies_details4dim_dates ON DYNAMIC TABLE TASKDB.STG.MOVIES_DETAILS;
+
+USE ROLE OPS;
+CREATE OR REPLACE TASK taskdb.dwh.populate_dim_dates
+    WAREHOUSE = TRANSFORM_WH
+    AFTER TASKDB.DWH.DWH_START
+    AS 
+MERGE INTO taskdb.dwh.dim_dates dd USING (
+    WITH json_extract AS (
+        SELECT 
+            response:Released::string AS released,
+            response:DVD::string AS dvd,
+            response:Year::string as y,
+            METADATA$ISUPDATE
+        FROM TASKDB.DWH.STREAM_MOVIES_DETAILS4DIM_DATES WHERE METADATA$ACTION <> 'DELETE' 
+    ),
+    source AS (
+        SELECT TO_DATE(released, 'DD MON YYYY') AS date_value, METADATA$ISUPDATE FROM json_extract WHERE released <> 'N/A' OR released <> NULL
+        UNION
+        SELECT TO_DATE(dvd, 'DD MON YYYY') AS date_value, METADATA$ISUPDATE FROM json_extract WHERE dvd <> 'N/A' OR dvd <> NULL
+        UNION
+        SELECT TO_DATE(y, 'YYYY') AS date_value, METADATA$ISUPDATE FROM json_extract WHERE NOT CONTAINS(y, '-')
+        UNION
+        SELECT TO_DATE(SPLIT_PART(y, '-', 1), 'YYYY') AS date_value, METADATA$ISUPDATE FROM json_extract WHERE CONTAINS(y, '-')
+        UNION
+        SELECT TO_DATE(SPLIT_PART(y, '-', 2), 'YYYY') AS date_value, METADATA$ISUPDATE FROM json_extract WHERE CONTAINS(y, '-')
+        UNION
+        SELECT TO_DATE(date) AS date_value, METADATA$ISUPDATE FROM TASKDB.DWH.STREAM_REVENUES_PER_DAY4DIM_DATES WHERE METADATA$ACTION <> 'DELETE' 
+    )
+        SELECT date_value, METADATA$ISUPDATE FROM source ) s
+ON dd.date_value = s.date_value
+/* WHEN MATCHED AND s.METADATA$ISUPDATE = 'TRUE' THEN UPDATE
+    SET dd.updated_date = current_timestamp() */
+WHEN NOT MATCHED THEN INSERT (date_value)
+    VALUES (s.date_value);
+
+
+-- DELETION SECTION
+/* 
+USE ROLE DEV;
+ALTER TASK TASKDB.DWH.POPULATE_DIM_DATES SUSPEND;
+DROP TASK IF EXISTS TASKDB.DWH.POPULATE_DIM_DATES;
+DROP STREAM IF EXISTS TASKDB.DWH.STREAM_REVENUES_PER_DAY4DIM_DATES;
+DROP STREAM IF EXISTS TASKDB.DWH.STREAM_MOVIES_DETAILS4DIM_DATES;
+DROP TABLE IF EXISTS TASKDB.DWH.DIM_DATES;
+*/

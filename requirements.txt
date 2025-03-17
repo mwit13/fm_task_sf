@@ -1,0 +1,7 @@
+snowflake-connector-python[pandas, pyarrow]==3.13.2
+snowflake-snowpark-python[pandas]==1.28.0
+pandas==2.2.3
+pyarrow==19.0.0
+sf-git==1.4.2
+tqdm==4.66.5
+furl==2.1.3
